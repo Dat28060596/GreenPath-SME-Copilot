@@ -1,9 +1,7 @@
-import { GoogleGenAI } from "@google/genai";
-import { Question } from "../types";
+import { GoogleGenAI, Type, Schema } from "@google/genai";
+import { Question, ActionPlanItem, CompanyProfile } from "../types";
 
-// Initialize the client. 
-// Note: In a production app, the key should be proxied or carefully managed. 
-// Here we assume process.env.API_KEY is available.
+// Initialize the client.
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
 
 const MODEL_NAME = "gemini-3-flash-preview";
@@ -54,10 +52,6 @@ export const extractDataFromDocument = async (
 ): Promise<{ text: string; confidence: number }> => {
   try {
      if (!process.env.API_KEY) return { text: "Mock extraction: API Key missing.", confidence: 0 };
-
-    // Since we cannot actually upload files in this browser environment to the server,
-    // We will simulate the extraction by asking Gemini what data *typically* resides in such a file
-    // and generating a realistic "extraction" result to demonstrate the UI flow.
     
     const prompt = `
       Simulate a data extraction result for an uploaded file named "${fileName}" of type "${fileType}".
@@ -82,5 +76,102 @@ export const extractDataFromDocument = async (
 
   } catch (error) {
     return { text: "Error extracting data from document.", confidence: 0 };
+  }
+};
+
+export const generateActionPlan = async (
+  profile: CompanyProfile,
+  questions: Question[]
+): Promise<ActionPlanItem[]> => {
+  try {
+    if (!process.env.API_KEY) {
+      // Return mock data if no key
+      return [
+        { id: "mock1", title: "Setup Energy Monitoring (Mock)", impact: "High", effort: "Medium", status: "Planned" },
+        { id: "mock2", title: "Create Diversity Policy (Mock)", impact: "Medium", effort: "Easy", status: "Planned" }
+      ];
+    }
+
+    const unfinishedTopics = questions
+      .filter(q => q.status === 'not_started' || q.status === 'in_progress')
+      .map(q => q.topic)
+      .join(', ');
+
+    const prompt = `
+      Generate a specific ESG action plan for a ${profile.size} ${profile.industry} company in ${profile.location}.
+      Focus on these unfinished areas: ${unfinishedTopics}.
+      
+      Generate 3-5 concrete, actionable items.
+      
+      For each item, specify:
+      - title: A clear action title
+      - impact: 'High', 'Medium', or 'Low'
+      - effort: 'Hard', 'Medium', or 'Easy'
+      - status: 'Planned'
+    `;
+
+    const response = await ai.models.generateContent({
+      model: MODEL_NAME,
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              title: { type: Type.STRING },
+              impact: { type: Type.STRING, enum: ["High", "Medium", "Low"] },
+              effort: { type: Type.STRING, enum: ["Hard", "Medium", "Easy"] },
+              status: { type: Type.STRING, enum: ["Planned", "In Progress", "Done"] }
+            },
+            required: ["title", "impact", "effort", "status"]
+          }
+        }
+      }
+    });
+
+    const jsonStr = response.text || "[]";
+    const items = JSON.parse(jsonStr);
+    
+    return items.map((item: any, index: number) => ({
+      ...item,
+      id: `gen-${Date.now()}-${index}`
+    }));
+
+  } catch (error) {
+    console.error("Action Plan Error:", error);
+    return [];
+  }
+};
+
+export const suggestAnswer = async (
+  question: Question,
+  profile: CompanyProfile
+): Promise<string> => {
+  try {
+    if (!process.env.API_KEY) return "1000 (Mock Suggestion)";
+
+    const prompt = `
+      Suggest a realistic value or text response for an ESG report question based on benchmarks for a ${profile.size} ${profile.industry} company in ${profile.location}.
+      
+      Question Topic: ${question.topic}
+      Question Text: ${question.text}
+      Unit: ${question.unit || 'N/A'}
+
+      If it is a numeric metric (like energy), provide a realistic estimate number only.
+      If it is a text question (like a policy description), draft a short, compliant 1-sentence response.
+      
+      Output ONLY the suggested value/text.
+    `;
+
+    const response = await ai.models.generateContent({
+      model: MODEL_NAME,
+      contents: prompt,
+    });
+
+    return response.text?.trim() || "";
+  } catch (error) {
+    return "";
   }
 };

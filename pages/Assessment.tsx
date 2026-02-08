@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
-import { ChevronRight, Info, Paperclip, CheckCircle2, Circle } from 'lucide-react';
-import { INITIAL_QUESTIONS } from '../constants';
-import { Question, ESGCategory } from '../types';
+import { ChevronRight, Info, Paperclip, CheckCircle2, Circle, Sparkles, Loader2, CheckSquare } from 'lucide-react';
+import { Question, ESGCategory, ESGStatus } from '../types';
+import { suggestAnswer } from '../services/geminiService';
+import { useNavigate } from 'react-router-dom';
+import { useAppContext } from '../context/AppContext';
 
 interface AssessmentProps {
   onSelectQuestion: (q: Question) => void;
@@ -9,13 +11,62 @@ interface AssessmentProps {
 }
 
 const Assessment: React.FC<AssessmentProps> = ({ onSelectQuestion, openCopilot }) => {
-  const [questions, setQuestions] = useState<Question[]>(INITIAL_QUESTIONS);
+  const navigate = useNavigate();
+  const { questions, updateQuestion, company } = useAppContext();
   const [activeCategory, setActiveCategory] = useState<ESGCategory>('Environment');
+  const [suggestionLoadingId, setSuggestionLoadingId] = useState<string | null>(null);
 
   const categories: ESGCategory[] = ['Environment', 'Social', 'Governance'];
 
   const handleValueChange = (id: string, value: string) => {
-    setQuestions(questions.map(q => q.id === id ? { ...q, value, status: value ? 'in_progress' : 'not_started' } : q));
+    // If user types, we generally reset to in_progress unless it was empty
+    updateQuestion(id, { 
+        value, 
+        status: value ? 'in_progress' : 'not_started' 
+    });
+  };
+
+  const handleStatusToggle = (id: string, currentStatus: ESGStatus, hasValue: boolean) => {
+      if (!hasValue && currentStatus !== 'completed') return; // Prevent completing empty questions
+      
+      const newStatus = (currentStatus === 'completed' || currentStatus === 'verified') 
+        ? 'in_progress' 
+        : 'completed';
+      
+      updateQuestion(id, { status: newStatus });
+  };
+
+  const handleAutoSuggest = async (e: React.MouseEvent, question: Question) => {
+    e.stopPropagation();
+    setSuggestionLoadingId(question.id);
+    
+    const suggestion = await suggestAnswer(question, company);
+    
+    if (suggestion) {
+        handleValueChange(question.id, suggestion);
+    }
+    setSuggestionLoadingId(null);
+  };
+
+  const handleAttach = (e: React.MouseEvent, questionId: string) => {
+    e.stopPropagation();
+    // In a real app, this would open a file picker.
+    // For this demo, we'll simulate attaching a file.
+    const mockFileId = `ev-new-${Date.now()}`;
+    const question = questions.find(q => q.id === questionId);
+    if(question) {
+        updateQuestion(questionId, { evidenceIds: [...question.evidenceIds, mockFileId] });
+        alert("Mock file attached successfully! It will appear in the Evidence library.");
+    }
+  };
+
+  const handleNextSection = () => {
+      const currentIndex = categories.indexOf(activeCategory);
+      if (currentIndex < categories.length - 1) {
+          setActiveCategory(categories[currentIndex + 1]);
+      } else {
+          navigate('/evidence');
+      }
   };
 
   const filteredQuestions = questions.filter(q => q.category === activeCategory);
@@ -58,7 +109,7 @@ const Assessment: React.FC<AssessmentProps> = ({ onSelectQuestion, openCopilot }
         {filteredQuestions.map((q) => (
           <div 
             key={q.id} 
-            className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm transition-all hover:border-indigo-200 group focus-within:ring-2 focus-within:ring-indigo-100 focus-within:border-indigo-300"
+            className={`bg-white border rounded-xl p-6 shadow-sm transition-all hover:border-indigo-200 group focus-within:ring-2 focus-within:ring-indigo-100 focus-within:border-indigo-300 ${q.status === 'completed' || q.status === 'verified' ? 'border-green-200 bg-green-50/10' : 'border-slate-200'}`}
             onClick={() => onSelectQuestion(q)}
           >
             <div className="flex items-start justify-between mb-4">
@@ -90,23 +141,69 @@ const Assessment: React.FC<AssessmentProps> = ({ onSelectQuestion, openCopilot }
             <div className="pl-8">
               <div className="flex flex-col md:flex-row gap-4">
                 <div className="flex-1">
-                    <label className="block text-xs font-medium text-slate-700 mb-1.5">
-                        Your Response {q.unit && `(${q.unit})`}
-                    </label>
+                    <div className="flex items-center justify-between mb-1.5">
+                        <label className="block text-xs font-medium text-slate-700">
+                            Your Response {q.unit && `(${q.unit})`}
+                        </label>
+                        <button 
+                            onClick={(e) => handleAutoSuggest(e, q)}
+                            disabled={suggestionLoadingId === q.id || q.status === 'completed'}
+                            className="text-xs text-indigo-600 hover:text-indigo-700 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50"
+                            title="Auto-fill with AI based on industry benchmarks"
+                        >
+                            {suggestionLoadingId === q.id ? (
+                                <Loader2 size={12} className="animate-spin" />
+                            ) : (
+                                <Sparkles size={12} />
+                            )}
+                            Auto-Fill
+                        </button>
+                    </div>
                     <div className="relative">
                         <input 
                             type={typeof q.value === 'number' ? 'number' : 'text'}
-                            className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors"
+                            className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-900 focus:outline-none focus:border-indigo-500 focus:bg-white transition-colors disabled:bg-slate-100 disabled:text-slate-500"
                             placeholder={q.unit ? `e.g. 1200` : "Enter text..."}
                             value={q.value || ''}
                             onChange={(e) => handleValueChange(q.id, e.target.value)}
+                            // disabled={q.status === 'completed' || q.status === 'verified'} // Optional: Disable input when complete
                         />
                     </div>
+                    
+                    {/* Mark as Complete Toggle */}
+                    <div className="mt-3 flex items-center gap-2">
+                        <button
+                            onClick={() => handleStatusToggle(q.id, q.status, !!q.value)}
+                            disabled={!q.value && q.status !== 'completed'}
+                            className={`flex items-center gap-2 text-sm px-3 py-1.5 rounded-lg border transition-all ${
+                                q.status === 'completed' || q.status === 'verified'
+                                    ? 'bg-green-100 border-green-200 text-green-700 hover:bg-green-200' 
+                                    : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed'
+                            }`}
+                        >
+                            {q.status === 'completed' || q.status === 'verified' ? (
+                                <>
+                                    <CheckSquare size={16} /> Completed
+                                </>
+                            ) : (
+                                <>
+                                    <div className="w-4 h-4 border-2 border-slate-300 rounded sm:w-4 sm:h-4"></div> Mark as Complete
+                                </>
+                            )}
+                        </button>
+                        {!q.value && q.status !== 'completed' && (
+                            <span className="text-xs text-slate-400">Enter a value to complete</span>
+                        )}
+                    </div>
+
                 </div>
                 
-                {/* Simulated Evidence Quick Attach */}
+                {/* Evidence Quick Attach */}
                 <div className="flex-shrink-0 pt-6">
-                    <button className="flex items-center gap-2 px-3 py-2 border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 hover:text-slate-900 text-sm transition-colors">
+                    <button 
+                        onClick={(e) => handleAttach(e, q.id)}
+                        className="flex items-center gap-2 px-3 py-2 border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 hover:text-slate-900 text-sm transition-colors"
+                    >
                         <Paperclip size={16} />
                         Attach
                     </button>
@@ -126,8 +223,11 @@ const Assessment: React.FC<AssessmentProps> = ({ onSelectQuestion, openCopilot }
         ))}
 
         <div className="flex justify-end pt-6">
-             <button className="flex items-center gap-2 px-6 py-3 bg-slate-900 text-white rounded-lg hover:bg-slate-800 font-medium">
-                Next Section <ChevronRight size={18} />
+             <button 
+                onClick={handleNextSection}
+                className="flex items-center gap-2 px-6 py-3 bg-slate-900 text-white rounded-lg hover:bg-slate-800 font-medium transition-colors"
+             >
+                {activeCategory === 'Governance' ? 'Go to Evidence' : 'Next Section'} <ChevronRight size={18} />
              </button>
         </div>
       </div>
