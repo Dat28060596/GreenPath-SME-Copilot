@@ -1,7 +1,6 @@
 # GreenPath SME Copilot 🌿
 
-![GreenPath Banner](./public/banner.png)
-> *Note: Replace with your actual banner or dashboard screenshot*
+
 
 **AI-Powered ESG Reporting & Sustainability Assistant for SMEs.**
 
