@@ -85,19 +85,7 @@ Follow these steps to run the project locally.
 
 5.  Open your browser to `http://localhost:5173` (or the port shown in your terminal).
 
-## 📸 Screen Showcase
 
-| Dashboard | Copilot Chat |
-|:---:|:---:|
-| ![Dashboard](./screenshots/dashboard.png) | ![Copilot](./screenshots/copilot.png) |
-
-| Evidence Extraction | Final Report |
-|:---:|:---:|
-| ![Evidence](./screenshots/evidence.png) | ![Report](./screenshots/report.png) |
-
-## 👥 The Team
-
-* **Nguyen Viet Dat** - Lead Developer & AI Integration
 
 ## 📄 License
 
