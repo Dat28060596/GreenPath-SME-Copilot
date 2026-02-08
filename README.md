@@ -20,11 +20,11 @@ GreenPath is an intelligent SaaS assistant that guides businesses from **zero to
 
 This project is powered entirely by the **Google Gemini API**. We leverage its multimodal and reasoning capabilities to solve the hardest parts of ESG reporting:
 
-1.  **Multimodal Evidence Extraction **
+1.  **Multimodal Evidence Extraction**
     * Users upload raw utility bills, fuel invoices, or policy documents (PDF/Images).
     * Gemini Vision analyzes the files, identifies the document type, and extracts key data points (e.g., "1,500 kWh electricity") with >95% accuracy, populating the assessment automatically.
 
-2.  **Context-Aware Copilot **
+2.  **Context-Aware Copilot**
     * Our "Ask Copilot" chat isn't just a generic bot. It knows exactly which assessment field the user is working on (e.g., "Scope 1 Emissions").
     * It helps non-experts understand complex regulations, converts units (e.g., "gallons to liters"), and validates data anomalies in real-time.
 
