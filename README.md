@@ -87,10 +87,3 @@ Follow these steps to run the project locally.
 
 
 
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
----
-
-*Built for the Google Gemini API Developer Competition.*
